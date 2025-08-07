@@ -1,0 +1,66 @@
+# 本地域名列表 - local.txt
+# 这些域名将直接使用AdGuardHome处理
+
+# === 路由器管理界面 ===
+router.asus.com
+www.asusrouter.com
+routerlogin.net
+routerlogin.com
+
+# === PVE/虚拟化管理 ===
+pve.local
+proxmox.local
+esxi.local
+vcenter.local
+
+# === 自建服务域名 ===
+# NAS/存储服务
+nas.local
+synology.local
+qnap.local
+truenas.local
+
+# 家庭实验室服务
+homelab.local
+lab.local
+dev.local
+test.local
+
+# 媒体服务
+plex.local
+jellyfin.local
+emby.local
+kodi.local
+
+# 网络管理
+unifi.local
+ubiquiti.local
+mikrotik.local
+
+# 监控服务
+grafana.local
+prometheus.local
+zabbix.local
+nagios.local
+
+# === 本地开发域名 ===
+localhost.localdomain
+local.dev
+*.homelab
+*.nas
+*.lab
+*.dev
+*.test
+
+# === IoT设备 ===
+printer.local
+camera.local
+smart.local
+iot.local
+
+# === 自定义服务 ===
+# 在这里添加您的自定义本地域名
+# 格式：每行一个域名，支持通配符 *
+# 示例：
+# myservice.local
+# *.mydomain.local

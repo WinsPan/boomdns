@@ -1,0 +1,369 @@
+# MosDNS 优化配置文件 - v5 语法
+# 架构: MosDNS(10.0.0.4) -> AdGuardHome(10.0.0.5,国内) + mihomo(10.0.0.6,国外)
+# 项目: hnet - 基于PVE的家庭服务器智能DNS分流方案
+# 优化特性: 性能调优、错误处理、监控增强、配置简化
+
+# ==================== 基础配置 ====================
+log:
+  level: info
+  file: "/var/log/homeserver/mosdns/mosdns.log"
+  production: true  # 生产模式，减少调试输出
+
+# API 和监控
+api:
+  http: "0.0.0.0:9091"
+
+# 包含其他配置文件
+include: []
+
+# ==================== 数据源和插件配置 ====================
+plugins:
+  # ===== 域名和IP数据集 =====
+  - tag: geosite_cn
+    type: domain_set
+    args:
+      files:
+        - "/opt/homeserver/data/geosite_cn.txt"
+      refresh_interval: 86400  # 24小时自动更新
+
+  - tag: geoip_cn
+    type: ip_set
+    args:
+      files:
+        - "/opt/homeserver/data/geoip_cn.txt"
+      refresh_interval: 86400
+
+  # 本地域名白名单（手动维护）
+  - tag: local_domains
+    type: domain_set
+    args:
+      files:
+        - "/opt/homeserver/rules/local-domains.txt"
+
+  # 广告和恶意域名黑名单
+  - tag: ad_block
+    type: domain_set
+    args:
+      files:
+        - "/opt/homeserver/rules/ad-block.txt"
+      urls:
+        - "https://raw.githubusercontent.com/AdguardTeam/AdguardFilters/master/BaseFilter/sections/adservers.txt"
+        - "https://someonewhocares.org/hosts/zero/hosts"
+      refresh_interval: 43200  # 12小时更新一次
+
+  # 国外域名列表
+  - tag: proxy_domains
+    type: domain_set
+    args:
+      files:
+        - "/opt/homeserver/rules/proxy-domains.txt"
+      urls:
+        - "https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/gfw.txt"
+        - "https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/proxy-list.txt"
+      refresh_interval: 86400
+
+  # DDNS 域名（需要低TTL）
+  - tag: ddns_domains
+    type: domain_set
+    args:
+      files:
+        - "/opt/homeserver/rules/ddns-domains.txt"
+
+  # ===== 缓存系统（优化版） =====
+  - tag: main_cache
+    type: cache
+    args:
+      size: 8192              # 增加缓存容量
+      lazy_cache_ttl: 21600   # 6小时懒缓存
+      dump_file: "/opt/homeserver/data/cache.dump"
+      dump_interval: 1800     # 30分钟持久化
+      clean_interval: 300     # 5分钟清理过期条目
+
+  # DDNS 专用缓存（短TTL）
+  - tag: ddns_cache
+    type: cache
+    args:
+      size: 1024
+      lazy_cache_ttl: 0       # 禁用懒缓存
+      dump_file: "/opt/homeserver/data/ddns_cache.dump"
+
+  # ===== 上游DNS服务器配置 =====
+  # AdGuardHome - 国内DNS + 广告拦截
+  - tag: adguard_upstream
+    type: forward
+    args:
+      concurrent: 3           # 增加并发数
+      upstreams:
+        - addr: "10.0.0.5:53"
+          dial_addr: "10.0.0.5:53"
+          bootstrap: "119.29.29.29:53"
+          trusted: true
+          enable_pipeline: false
+          max_conns: 4         # 增加连接池
+          idle_timeout: 60
+          enable_http3: false
+
+  # mihomo - 国外DNS + 代理
+  - tag: mihomo_upstream
+    type: forward
+    args:
+      concurrent: 2
+      upstreams:
+        - addr: "10.0.0.6:1053"
+          dial_addr: "10.0.0.6:1053"
+          bootstrap: "119.29.29.29:53"
+          trusted: true
+          enable_pipeline: false
+          max_conns: 3
+          idle_timeout: 60
+
+  # 国内备用DNS（直连）
+  - tag: china_backup
+    type: forward
+    args:
+      concurrent: 2
+      upstreams:
+        - addr: "223.5.5.5:53"     # 阿里DNS
+          trusted: true
+        - addr: "119.29.29.29:53"  # 腾讯DNS
+          trusted: true
+      bootstrap: "114.114.114.114:53"
+
+  # 国外备用DNS（直连）
+  - tag: foreign_backup
+    type: forward
+    args:
+      concurrent: 2
+      upstreams:
+        - addr: "8.8.8.8:53"       # Google DNS
+          trusted: true
+        - addr: "1.1.1.1:53"       # Cloudflare DNS
+          trusted: true
+
+  # ===== TTL管理 =====
+  - tag: modify_ttl_normal
+    type: ttl
+    args:
+      minimal_ttl: 300        # 5分钟最小TTL
+      maximum_ttl: 3600       # 1小时最大TTL
+
+  - tag: modify_ttl_ddns
+    type: ttl
+    args:
+      minimal_ttl: 30         # 30秒最小TTL（适合DDNS）
+      maximum_ttl: 300        # 5分钟最大TTL
+
+  # ===== 健康检查和故障转移 =====
+  - tag: adguard_with_fallback
+    type: fallback
+    args:
+      primary: adguard_upstream
+      secondary: china_backup
+      threshold: 800          # 800ms超时切换
+      always_standby: true
+
+  - tag: mihomo_with_fallback
+    type: fallback
+    args:
+      primary: mihomo_upstream
+      secondary: foreign_backup
+      threshold: 1000         # 1000ms超时切换
+      always_standby: true
+
+  # ===== 智能分流序列 =====
+  # 广告拦截处理
+  - tag: handle_ad_block
+    type: sequence
+    args:
+      - matches: qname $ad_block
+        exec: reject 3         # 返回NXDOMAIN
+
+  # DDNS域名处理（低TTL）
+  - tag: handle_ddns
+    type: sequence
+    args:
+      - matches: qname $ddns_domains
+        exec: jump ddns_flow
+
+  # 本地域名处理
+  - tag: handle_local
+    type: sequence
+    args:
+      - matches:
+          - qname $local_domains
+          - qname "*.local"
+          - qname "*.lan"
+          - qname "*.home"
+          - qname "*.internal"
+        exec: jump local_flow
+
+  # 国内域名处理
+  - tag: handle_china
+    type: sequence
+    args:
+      - matches: qname $geosite_cn
+        exec: jump china_flow
+
+  # 代理域名处理
+  - tag: handle_proxy
+    type: sequence
+    args:
+      - matches: qname $proxy_domains
+        exec: jump proxy_flow
+
+  # 智能分流（默认策略）
+  - tag: handle_smart
+    type: sequence
+    args:
+      - exec: jump smart_flow
+
+  # ===== 具体处理流程 =====
+  # DDNS处理流程
+  - tag: ddns_flow
+    type: sequence
+    args:
+      - exec: $ddns_cache
+      - matches: has_resp
+        exec: accept
+      - exec: $adguard_with_fallback
+      - exec: $modify_ttl_ddns
+      - exec: $ddns_cache
+
+  # 本地域名处理流程
+  - tag: local_flow
+    type: sequence
+    args:
+      - exec: $main_cache
+      - matches: has_resp
+        exec: accept
+      - exec: $adguard_with_fallback
+      - exec: $modify_ttl_normal
+      - exec: $main_cache
+
+  # 国内域名处理流程
+  - tag: china_flow
+    type: sequence
+    args:
+      - exec: $main_cache
+      - matches: has_resp
+        exec: accept
+      - exec: $adguard_with_fallback
+      - matches: "!resp_ip $geoip_cn"
+        exec: drop_resp           # 如果返回国外IP，丢弃结果
+      - exec: $modify_ttl_normal
+      - exec: $main_cache
+
+  # 代理域名处理流程
+  - tag: proxy_flow
+    type: sequence
+    args:
+      - exec: $main_cache
+      - matches: has_resp
+        exec: accept
+      - exec: $mihomo_with_fallback
+      - exec: $modify_ttl_normal
+      - exec: $main_cache
+
+  # 智能分流处理流程
+  - tag: smart_flow
+    type: sequence
+    args:
+      - exec: $main_cache
+      - matches: has_resp
+        exec: accept
+      # 先尝试国内DNS
+      - exec: $adguard_with_fallback
+      - matches:
+          - has_resp
+          - resp_ip $geoip_cn      # 如果返回国内IP，接受结果
+        exec: accept
+      # 如果返回国外IP或无响应，使用代理DNS
+      - exec: $mihomo_with_fallback
+      - exec: $modify_ttl_normal
+      - exec: $main_cache
+
+  # ===== 查询日志和监控 =====
+  - tag: query_log
+    type: sequence
+    args:
+      - exec: metrics         # 启用指标收集
+      - exec: query_summary   # 查询摘要日志
+
+  # ===== 主处理序列 =====
+  - tag: main_sequence
+    type: sequence
+    args:
+      # 查询日志
+      - exec: $query_log
+      
+      # 只处理A、AAAA、CNAME查询
+      - matches:
+          - "!qtype 1"
+          - "!qtype 28"
+          - "!qtype 5"
+        exec: reject 3
+
+      # 广告拦截
+      - exec: $handle_ad_block
+      - matches: has_resp
+        exec: accept
+
+      # DDNS域名处理
+      - exec: $handle_ddns
+      - matches: has_resp
+        exec: accept
+
+      # 本地域名处理
+      - exec: $handle_local
+      - matches: has_resp
+        exec: accept
+
+      # 国内域名处理
+      - exec: $handle_china
+      - matches: has_resp
+        exec: accept
+
+      # 代理域名处理
+      - exec: $handle_proxy
+      - matches: has_resp
+        exec: accept
+
+      # 智能分流（默认）
+      - exec: $handle_smart
+
+  # ===== 服务器配置 =====
+  - tag: udp_server
+    type: udp_server
+    args:
+      entry: main_sequence
+      listen: "0.0.0.0:53"
+      timeout: 5              # 5秒查询超时
+
+  - tag: tcp_server
+    type: tcp_server
+    args:
+      entry: main_sequence
+      listen: "0.0.0.0:53"
+      timeout: 10             # 10秒TCP超时
+      idle_timeout: 30        # 30秒空闲超时
+
+  # 备用服务器端口（用于测试和调试）
+  - tag: debug_udp_server
+    type: udp_server
+    args:
+      entry: main_sequence
+      listen: "0.0.0.0:1053"
+
+# ==================== 性能和监控配置 ====================
+# 这些配置项需要根据实际需求调整
+
+# 进程限制
+ulimit:
+  max_open_files: 65535
+
+# 系统优化建议（需要在系统层面配置）
+# echo 'net.core.rmem_default = 262144' >> /etc/sysctl.conf
+# echo 'net.core.wmem_default = 262144' >> /etc/sysctl.conf
+# echo 'net.core.rmem_max = 16777216' >> /etc/sysctl.conf
+# echo 'net.core.wmem_max = 16777216' >> /etc/sysctl.conf
+# sysctl -p

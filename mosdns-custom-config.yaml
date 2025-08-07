@@ -1,0 +1,316 @@
+# MosDNS 配置文件 - 自定义三层DNS架构
+# 架构: MosDNS(10.0.0.4) -> AdGuardHome(10.0.0.5,国内) + mihomo(10.0.0.6,国外)
+# 项目: hnet - 基于PVE的家庭服务器分流方案
+
+# 日志配置
+log:
+  level: info
+  file: "/var/log/homeserver/mosdns/mosdns.log"
+
+# 数据源配置
+data_sources:
+  # geosite数据源 - 用于域名分类
+  - tag: geosite
+    type: v2ray_geodata
+    args:
+      file: "/opt/homeserver/data/geosite.dat"
+  
+  # geoip数据源 - 用于IP地理位置判断
+  - tag: geoip
+    type: v2ray_geodata
+    args:
+      file: "/opt/homeserver/data/geoip.dat"
+
+  # 国内域名白名单 - 支持远程更新
+  - tag: cn_domain
+    type: domain_set
+    args:
+      files:
+        - "/opt/homeserver/rules/direct.txt"
+      urls:
+        # Loyalsoldier 直连域名
+        - "https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/direct-list.txt"
+        # 国内常用域名
+        - "https://raw.githubusercontent.com/felixonmars/dnsmasq-china-list/master/accelerated-domains.china.conf"
+        # Apple 中国域名
+        - "https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/apple-cn.txt"
+      refresh_interval: 86400  # 24小时更新一次
+
+  # 代理域名列表 - 支持远程更新
+  - tag: proxy_list
+    type: domain_set
+    args:
+      files:
+        - "/opt/homeserver/rules/proxy.txt"
+      urls:
+        # GFW 列表
+        - "https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/gfw.txt"
+        # 国际流媒体
+        - "https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/greatfire.txt"
+        # Telegram 域名
+        - "https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/telegram.txt"
+      refresh_interval: 86400  # 24小时更新一次
+
+  # 本地自定义域名列表
+  - tag: local_domain
+    type: domain_set
+    args:
+      files:
+        - "/opt/homeserver/rules/local.txt"
+
+# 插件配置
+plugins:
+  # ===== 缓存插件 =====
+  - tag: cache
+    type: cache
+    args:
+      size: 4096              # 增大缓存条目数量
+      lazy_cache_ttl: 43200   # 12小时懒惰缓存
+      dump_file: "/opt/homeserver/data/cache.dump"
+      dump_interval: 1800     # 30分钟持久化间隔
+
+  # ===== 上游DNS服务器 =====
+  # AdGuardHome DNS服务器 - 处理国内域名
+  - tag: adguardhome_upstream
+    type: forward
+    args:
+      concurrent: 2
+      upstreams:
+        - addr: "10.0.0.5:53"          # AdGuardHome服务器
+          dial_addr: "10.0.0.5:53"
+          trusted: true
+          enable_pipeline: false        # AdGuardHome可能不支持pipeline
+      bootstrap:
+        - "223.5.5.5:53"               # 用于解析AdGuardHome地址的bootstrap DNS
+
+  # mihomo DNS服务器 - 处理国外域名
+  - tag: mihomo_upstream
+    type: forward
+    args:
+      concurrent: 2
+      upstreams:
+        - addr: "10.0.0.6:1053"        # mihomo DNS端口
+          dial_addr: "10.0.0.6:1053"
+          trusted: true
+          enable_pipeline: false
+      bootstrap:
+        - "223.5.5.5:53"
+
+  # 备用DNS服务器 - 当主要服务器不可用时使用
+  - tag: fallback_upstream
+    type: forward
+    args:
+      concurrent: 2
+      upstreams:
+        - addr: "223.5.5.5:53"         # 阿里DNS
+          dial_addr: "223.5.5.5:53"
+          trusted: true
+        - addr: "114.114.114.114:53"   # 114DNS
+          dial_addr: "114.114.114.114:53"
+          trusted: true
+
+  # ===== 响应修改插件 =====
+  # 修改TTL
+  - tag: modify_ttl
+    type: ttl
+    args:
+      minimal_ttl: 600       # 最小TTL 10分钟
+      maximum_ttl: 7200      # 最大TTL 2小时
+
+  # ===== 健康检查插件 =====
+  # AdGuardHome健康检查
+  - tag: check_adguardhome
+    type: sequence
+    args:
+      - exec: $adguardhome_upstream
+      - matches:
+          - "!rcode 2"        # 非SERVFAIL响应
+        exec: accept
+      - exec: $fallback_upstream
+
+  # mihomo健康检查
+  - tag: check_mihomo
+    type: sequence
+    args:
+      - exec: $mihomo_upstream
+      - matches:
+          - "!rcode 2"        # 非SERVFAIL响应
+        exec: accept
+      - exec: $fallback_upstream
+
+  # ===== 匹配器插件 =====
+  # 查询类型匹配
+  - tag: qtype_a_aaaa
+    type: query_matcher
+    args:
+      qtype: [1, 28]        # A和AAAA记录
+
+  # 国内域名匹配
+  - tag: match_cn_domain
+    type: query_matcher
+    args:
+      domain:
+        - "matcher:cn_domain"
+        - "matcher:geosite:cn"
+        - "matcher:geosite:apple-cn"
+        - "matcher:geosite:category-games@cn"
+
+  # 代理域名匹配
+  - tag: match_proxy_domain
+    type: query_matcher
+    args:
+      domain:
+        - "matcher:proxy_list"
+        - "matcher:geosite:geolocation-!cn"
+        - "matcher:geosite:gfw"
+        - "matcher:geosite:greatfire"
+
+  # 本地域名匹配
+  - tag: match_local_domain
+    type: query_matcher
+    args:
+      domain:
+        - "matcher:local_domain"
+        - "*.local"
+        - "*.lan"
+        - "*.localhost"
+        - "*.home"
+        - "*.internal"
+        - "*.localdomain"
+        - "10.0.0.0/8"
+        - "192.168.0.0/16"
+        - "172.16.0.0/12"
+
+  # 特殊服务域名匹配（需要特殊处理的域名）
+  - tag: match_special_domain
+    type: query_matcher
+    args:
+      domain:
+        # 路由器管理界面
+        - "router.asus.com"
+        - "www.asusrouter.com"
+        - "10.0.0.1"
+        - "192.168.1.1"
+        # PVE管理界面
+        - "pve.local"
+        - "proxmox.local"
+        # 自建服务
+        - "*.homelab"
+        - "*.nas"
+
+  # ===== IP结果过滤 =====
+  # 过滤国外IP的查询（防止DNS污染）
+  - tag: reject_foreign_ip_for_cn
+    type: sequence
+    args:
+      - matches:
+          - resp_ip: $geoip:!cn
+        exec: reject
+
+  # ===== 主要处理流程 =====
+  # 主序列处理
+  - tag: main_sequence
+    type: sequence
+    args:
+      # 只处理A和AAAA查询
+      - exec: $qtype_a_aaaa
+
+      # 查询日志记录
+      - exec: query_summary
+
+      # 本地域名和特殊域名直接使用AdGuardHome
+      - matches: 
+          - $match_local_domain
+          - $match_special_domain
+        exec: jump_to_adguardhome_flow
+
+      # 从缓存获取结果
+      - exec: $cache
+
+      # 国内域名使用AdGuardHome
+      - matches: $match_cn_domain
+        exec: jump_to_adguardhome_flow
+
+      # 代理域名使用mihomo
+      - matches: $match_proxy_domain
+        exec: jump_to_mihomo_flow
+
+      # 默认情况：先尝试AdGuardHome，如果返回国外IP则使用mihomo
+      - exec: jump_to_smart_flow
+
+  # AdGuardHome处理流程
+  - tag: adguardhome_flow
+    type: sequence
+    args:
+      - exec: $check_adguardhome
+      - matches:
+          - rcode: 0                  # 成功响应
+        exec: $modify_ttl
+      - exec: $cache
+
+  # mihomo处理流程
+  - tag: mihomo_flow
+    type: sequence
+    args:
+      - exec: $check_mihomo
+      - matches:
+          - rcode: 0                  # 成功响应
+        exec: $modify_ttl
+      - exec: $cache
+
+  # 智能分流处理流程
+  - tag: smart_flow
+    type: sequence
+    args:
+      # 先尝试AdGuardHome
+      - exec: $check_adguardhome
+      # 如果返回成功且是国内IP，则接受
+      - matches:
+          - rcode: 0
+          - resp_ip: $geoip:cn
+        exec: accept
+      # 如果返回成功但是国外IP，则使用mihomo重新查询
+      - matches:
+          - rcode: 0
+          - resp_ip: $geoip:!cn
+        exec: $check_mihomo
+      # 如果AdGuardHome失败，直接使用mihomo
+      - exec: $check_mihomo
+
+  # 跳转到AdGuardHome流程
+  - tag: jump_to_adguardhome_flow
+    type: sequence
+    args:
+      - exec: $adguardhome_flow
+
+  # 跳转到mihomo流程
+  - tag: jump_to_mihomo_flow
+    type: sequence
+    args:
+      - exec: $mihomo_flow
+
+  # 跳转到智能分流流程
+  - tag: jump_to_smart_flow
+    type: sequence
+    args:
+      - exec: $smart_flow
+
+# 服务器配置
+servers:
+  # 主DNS服务器 - UDP (10.0.0.4:53)
+  - exec: main_sequence
+    listeners:
+      - protocol: udp
+        addr: "0.0.0.0:53"
+
+  # 主DNS服务器 - TCP (10.0.0.4:53)
+  - exec: main_sequence
+    listeners:
+      - protocol: tcp
+        addr: "0.0.0.0:53"
+
+  # 备用DNS服务器 - 用于内部测试和调试
+  - exec: main_sequence
+    listeners:
+      - protocol: udp
+        addr: "0.0.0.0:1053"
