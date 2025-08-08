@@ -6,8 +6,9 @@ services:
       dockerfile: deploy/Dockerfile
       args:
         GOPROXY: https://goproxy.cn,direct
-        GO_IMAGE: registry.cn-hangzhou.aliyuncs.com/dockerhub-mirror/golang:1.22-alpine
-        RUNTIME_IMAGE: ccr.ccs.tencentyun.com/library/distroless:static-nonroot
+        # 如需国内镜像自行传入，例如：
+        # GO_IMAGE: ccr.ccs.tencentyun.com/library/golang:1.22-alpine
+        # RUNTIME_IMAGE: ccr.ccs.tencentyun.com/library/distroless:static-nonroot
     container_name: boomdns
     ports:
       - "53:53/udp"
