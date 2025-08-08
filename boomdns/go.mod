@@ -1,4 +1,4 @@
-module github.com/winspan/dnsfw
+module github.com/winspan/boomdns
 
 go 1.22.4
 

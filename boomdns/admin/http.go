@@ -8,7 +8,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/winspan/dnsfw/dns"
+	"github.com/winspan/boomdns/dns"
 )
 
 type Api struct {

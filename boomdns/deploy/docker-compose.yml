@@ -1,8 +1,8 @@
 version: "3.8"
 services:
-  dnsfw:
+  boomdns:
     build: .
-    container_name: dnsfw
+    container_name: boomdns
     ports:
       - "53:53/udp"
       - "53:53/tcp"
