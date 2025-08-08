@@ -1,6 +1,5 @@
-# syntax=docker/dockerfile:1.5
-
-FROM golang:1.22-alpine AS build
+ARG GO_IMAGE=golang:1.22-alpine
+FROM ${GO_IMAGE} AS build
 WORKDIR /src
 
 # 可通过 --build-arg GOPROXY=... 覆盖
@@ -27,7 +26,8 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     cd cmd/boomdns && \
     CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o /out/boomdns
 
-FROM gcr.io/distroless/static:nonroot
+ARG RUNTIME_IMAGE=gcr.io/distroless/static:nonroot
+FROM ${RUNTIME_IMAGE}
 WORKDIR /
 COPY --from=build /out/boomdns /boomdns
 EXPOSE 53/udp 53/tcp 8080
