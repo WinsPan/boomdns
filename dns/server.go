@@ -1,16 +1,16 @@
 package dns
 
 import (
-    "context"
-    "errors"
-    "log"
-    "net"
-    "strings"
-    "sync"
-    "time"
+	"context"
+	"errors"
+	"log"
+	"net"
+	"strings"
+	"sync"
+	"time"
 
-    mdns "github.com/miekg/dns"
-    "github.com/prometheus/client_golang/prometheus"
+	mdns "github.com/miekg/dns"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 type Server struct {
@@ -19,35 +19,39 @@ type Server struct {
 	// 最近查询日志（环形缓冲）
 	logs []QueryLog
 
-    // 预编译的规则列表（已标准化为小写、带或不带前导点的一致形式）
-    compiledChina []string
-    compiledGfw   []string
-    compiledAds   []string
+	// 预编译的规则列表（已标准化为小写、带或不带前导点的一致形式）
+	compiledChina []string
+	compiledGfw   []string
+	compiledAds   []string
+
+    // 上游健康状态（简单熔断）
+    healthMu       sync.Mutex
+    upstreamHealth map[string]*healthState
 }
 
 func NewServer(cfg *Config) (*Server, error) {
-    srv := &Server{cfg: cfg}
-    _ = srv.ReloadRules()
-    return srv, nil
+    srv := &Server{cfg: cfg, upstreamHealth: make(map[string]*healthState)}
+	_ = srv.ReloadRules()
+	return srv, nil
 }
 
 func (s *Server) ReloadRules() error {
-    s.mu.Lock()
-    defer s.mu.Unlock()
-    s.compiledChina = normalizeSuffixes(s.cfg.ChinaDomains)
-    s.compiledGfw = normalizeSuffixes(s.cfg.GfwDomains)
-    s.compiledAds = normalizeSuffixes(s.cfg.AdDomains)
-    return nil
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.compiledChina = normalizeSuffixes(s.cfg.ChinaDomains)
+	s.compiledGfw = normalizeSuffixes(s.cfg.GfwDomains)
+	s.compiledAds = normalizeSuffixes(s.cfg.AdDomains)
+	return nil
 }
 
 // SetRules 原子更新规则（由 SyncManager 或 API 调用）
 func (s *Server) SetRules(china, gfw, ads []string) {
-    s.mu.Lock()
-    s.cfg.ChinaDomains = china
-    s.cfg.GfwDomains = gfw
-    s.cfg.AdDomains = ads
-    s.mu.Unlock()
-    _ = s.ReloadRules()
+	s.mu.Lock()
+	s.cfg.ChinaDomains = china
+	s.cfg.GfwDomains = gfw
+	s.cfg.AdDomains = ads
+	s.mu.Unlock()
+	_ = s.ReloadRules()
 }
 
 func (s *Server) ServeUDP(conn *net.UDPConn) {
@@ -73,22 +77,22 @@ func (s *Server) handle(w mdns.ResponseWriter, r *mdns.Msg) {
 	name := strings.TrimSuffix(strings.ToLower(q.Name), ".")
 
 	// 分流：广告 -> adguard；gfw -> intl；china -> china；其他：先 china 失败再 intl
-    var upstreams []Upstream
+	var upstreams []Upstream
 	decision := ""
-    if s.match(name, s.compiledAds) && s.cfg.AdguardAddr != "" {
+	if s.match(name, s.compiledAds) && s.cfg.AdguardAddr != "" {
 		upstreams = []Upstream{{Address: s.cfg.AdguardAddr}}
 		decision = "adguard"
-    } else if s.match(name, s.compiledGfw) {
+	} else if s.match(name, s.compiledGfw) {
 		upstreams = s.cfg.IntlUpstreams
 		decision = "intl"
-    } else if s.match(name, s.compiledChina) {
+	} else if s.match(name, s.compiledChina) {
 		upstreams = s.cfg.ChinaUpstreams
 		decision = "china"
 	} else {
 		// fallback：china -> intl
-        if resp, err := s.forward(context.Background(), r, s.cfg.ChinaUpstreams, "china"); err == nil && hasAnswer(resp) {
+		if resp, err := s.forward(context.Background(), r, s.cfg.ChinaUpstreams, "china"); err == nil && hasAnswer(resp) {
 			s.addLog(name, "china")
-            queryCounter.WithLabelValues("china").Inc()
+			queryCounter.WithLabelValues("china").Inc()
 			_ = w.WriteMsg(resp)
 			return
 		}
@@ -96,13 +100,13 @@ func (s *Server) handle(w mdns.ResponseWriter, r *mdns.Msg) {
 		decision = "intl"
 	}
 
-    resp, err := s.forward(context.Background(), r, upstreams, decision)
+	resp, err := s.forward(context.Background(), r, upstreams, decision)
 	if err != nil {
 		s.writeServFail(w, r)
 		return
 	}
-    s.addLog(name, decision)
-    queryCounter.WithLabelValues(decision).Inc()
+	s.addLog(name, decision)
+	queryCounter.WithLabelValues(decision).Inc()
 	_ = w.WriteMsg(resp)
 }
 
@@ -118,8 +122,8 @@ func (s *Server) match(name string, suffixes []string) bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	for _, sfx := range suffixes {
-        sfx = strings.ToLower(strings.TrimSpace(sfx))
-        if sfx == "" {
+		sfx = strings.ToLower(strings.TrimSpace(sfx))
+		if sfx == "" {
 			continue
 		}
 		if strings.HasSuffix(name, strings.TrimPrefix(sfx, ".")) {
@@ -132,15 +136,22 @@ func (s *Server) match(name string, suffixes []string) bool {
 func (s *Server) forward(ctx context.Context, req *mdns.Msg, ups []Upstream, target string) (*mdns.Msg, error) {
 	var lastErr error
 	for _, up := range ups {
-        c := &mdns.Client{Net: netProto(up.Address), Timeout: 3 * time.Second}
-        start := time.Now()
+        netw, addr := upstreamDialParams(up.Address)
+        if !s.isUpstreamAvailable(netw, addr) {
+            upstreamSkippedUnhealthy.WithLabelValues(target).Inc()
+            continue
+        }
+        c := &mdns.Client{Net: netw, Timeout: 3 * time.Second}
+		start := time.Now()
 		// 这里未直接支持 socks5，建议使用 mihomo 暴露本地 DNS 端口，或在系统层做 socks5 透明转发
-		resp, _, err := c.Exchange(req, up.Address)
-        upstreamLatency.WithLabelValues(target).Observe(time.Since(start).Seconds())
+        resp, _, err := c.Exchange(req, addr)
+		upstreamLatency.WithLabelValues(target).Observe(time.Since(start).Seconds())
 		if err == nil && resp != nil {
+            s.recordSuccess(netw, addr)
 			return resp, nil
 		}
-        upstreamFailures.WithLabelValues(target).Inc()
+        s.recordFailure(netw, addr, target, err)
+		upstreamFailures.WithLabelValues(target).Inc()
 		lastErr = err
 	}
 	if lastErr == nil {
@@ -154,6 +165,67 @@ func netProto(addr string) string {
 		return "tcp"
 	}
 	return "udp"
+}
+
+// upstreamDialParams 解析上游地址，支持 tls:// 和 https:// 前缀的 TCP 连接（仅透传到 miekg/dns，不实现 DoH）。
+func upstreamDialParams(address string) (network, endpoint string) {
+    if strings.HasPrefix(address, "tls://") || strings.HasPrefix(address, "https://") {
+        // miekg/dns 使用 "tcp" 网络，endpoint 保留主机:端口
+        a := strings.TrimPrefix(strings.TrimPrefix(address, "tls://"), "https://")
+        return "tcp", a
+    }
+    return "udp", address
+}
+
+type healthState struct {
+    failures int
+    trippedUntil time.Time
+}
+
+// 简单熔断：连续失败 N 次后在 M 时间内跳过该上游
+const (
+    circuitFailThreshold = 3
+    circuitOpenDuration  = 30 * time.Second
+)
+
+func (s *Server) isUpstreamAvailable(network, endpoint string) bool {
+    s.healthMu.Lock()
+    defer s.healthMu.Unlock()
+    st := s.upstreamHealth[network+"|"+endpoint]
+    if st == nil {
+        return true
+    }
+    if time.Now().Before(st.trippedUntil) {
+        return false
+    }
+    return true
+}
+
+func (s *Server) recordFailure(network, endpoint, target string, err error) {
+    s.healthMu.Lock()
+    defer s.healthMu.Unlock()
+    key := network+"|"+endpoint
+    st := s.upstreamHealth[key]
+    if st == nil {
+        st = &healthState{}
+        s.upstreamHealth[key] = st
+    }
+    st.failures++
+    if st.failures >= circuitFailThreshold {
+        st.trippedUntil = time.Now().Add(circuitOpenDuration)
+        st.failures = 0
+        upstreamCircuitOpened.WithLabelValues(target).Inc()
+    }
+}
+
+func (s *Server) recordSuccess(network, endpoint string) {
+    s.healthMu.Lock()
+    defer s.healthMu.Unlock()
+    key := network+"|"+endpoint
+    if st := s.upstreamHealth[key]; st != nil {
+        st.failures = 0
+        st.trippedUntil = time.Time{}
+    }
 }
 
 type QueryLog struct {
@@ -185,50 +257,64 @@ func (s *Server) GetLogs(limit int) []QueryLog {
 
 // normalizeSuffixes 将规则统一为小写去空白的后缀匹配形式
 func normalizeSuffixes(in []string) []string {
-    out := make([]string, 0, len(in))
-    for _, s := range in {
-        s = strings.ToLower(strings.TrimSpace(s))
-        if s == "" {
-            continue
-        }
-        // 与 normalizeDomain 一致，确保有前导点，便于一致匹配
-        if !strings.HasPrefix(s, ".") {
-            if d, ok := normalizeDomain(s); ok {
-                s = d
-            } else {
-                continue
-            }
-        }
-        out = append(out, s)
-    }
-    return out
+	out := make([]string, 0, len(in))
+	for _, s := range in {
+		s = strings.ToLower(strings.TrimSpace(s))
+		if s == "" {
+			continue
+		}
+		// 与 normalizeDomain 一致，确保有前导点，便于一致匹配
+		if !strings.HasPrefix(s, ".") {
+			if d, ok := normalizeDomain(s); ok {
+				s = d
+			} else {
+				continue
+			}
+		}
+		out = append(out, s)
+	}
+	return out
 }
 
 var (
-    queryCounter = prometheus.NewCounterVec(
+	queryCounter = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "boomdns_queries_total",
+			Help: "Total DNS queries by route decision",
+		},
+		[]string{"route"},
+	)
+	upstreamLatency = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "boomdns_upstream_request_duration_seconds",
+			Help:    "DNS upstream request duration in seconds",
+			Buckets: prometheus.DefBuckets,
+		},
+		[]string{"target"},
+	)
+	upstreamFailures = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "boomdns_upstream_failures_total",
+			Help: "Total DNS upstream request failures",
+		},
+		[]string{"target"},
+	)
+    upstreamCircuitOpened = prometheus.NewCounterVec(
         prometheus.CounterOpts{
-            Name: "boomdns_queries_total",
-            Help: "Total DNS queries by route decision",
-        },
-        []string{"route"},
-    )
-    upstreamLatency = prometheus.NewHistogramVec(
-        prometheus.HistogramOpts{
-            Name:    "boomdns_upstream_request_duration_seconds",
-            Help:    "DNS upstream request duration in seconds",
-            Buckets: prometheus.DefBuckets,
+            Name: "boomdns_upstream_circuit_opened_total",
+            Help: "Times of upstream circuit breaker opened",
         },
         []string{"target"},
     )
-    upstreamFailures = prometheus.NewCounterVec(
+    upstreamSkippedUnhealthy = prometheus.NewCounterVec(
         prometheus.CounterOpts{
-            Name: "boomdns_upstream_failures_total",
-            Help: "Total DNS upstream request failures",
+            Name: "boomdns_upstream_skipped_unhealthy_total",
+            Help: "Upstream attempts skipped due to temporary unhealthy state",
         },
         []string{"target"},
     )
 )
 
 func init() {
-    prometheus.MustRegister(queryCounter, upstreamLatency, upstreamFailures)
+    prometheus.MustRegister(queryCounter, upstreamLatency, upstreamFailures, upstreamCircuitOpened, upstreamSkippedUnhealthy)
 }
