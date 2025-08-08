@@ -1,4 +1,5 @@
 ARG GO_IMAGE=golang:1.22-alpine
+ARG RUNTIME_IMAGE=gcr.io/distroless/static:nonroot
 FROM ${GO_IMAGE} AS build
 WORKDIR /src
 
@@ -26,7 +27,6 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     cd cmd/boomdns && \
     CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o /out/boomdns
 
-ARG RUNTIME_IMAGE=gcr.io/distroless/static:nonroot
 FROM ${RUNTIME_IMAGE}
 WORKDIR /
 COPY --from=build /out/boomdns /boomdns
