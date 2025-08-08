@@ -22,6 +22,14 @@ type Config struct {
     ChinaDomains []string `yaml:"china_domains"`
     GfwDomains   []string `yaml:"gfw_domains"`
     AdDomains    []string `yaml:"ad_domains"`
+
+    // 规则订阅源与刷新周期（可选）
+    RuleSync struct {
+        RefreshInterval string   `yaml:"refresh_interval"` // 例如 "6h"
+        GFWListURLs     []string `yaml:"gfwlist_urls"`
+        ChinaListURLs   []string `yaml:"china_list_urls"`  // felixonmars accelerated-domains.china.conf
+        AdListURLs      []string `yaml:"adlist_urls"`      // hosts 或域名列表
+    } `yaml:"rule_sync"`
 }
 
 func LoadConfig(path string) (*Config, error) {
