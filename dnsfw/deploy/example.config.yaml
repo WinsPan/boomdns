@@ -1,0 +1,28 @@
+listen_dns: ":53"
+listen_http: ":8080"
+
+china_upstreams:
+  - address: 223.5.5.5:53
+  - address: 119.29.29.29:53
+
+intl_upstreams:
+  # 建议由 mihomo 暴露本地 DNS 10.0.0.6:1053，经代理出国
+  - address: 10.0.0.6:1053
+
+adguard_addr: 10.0.0.5:53
+
+china_domains:
+  - .cn
+  - .alipay.com
+  - .qq.com
+
+gfw_domains:
+  - .google.com
+  - .twitter.com
+  - .youtube.com
+
+ad_domains:
+  - .doubleclick.net
+  - .googlesyndication.com
+
+
