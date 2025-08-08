@@ -13,6 +13,7 @@ type Upstream struct {
 type Config struct {
     ListenDNS  string     `yaml:"listen_dns"`
     ListenHTTP string     `yaml:"listen_http"`
+    AdminToken string     `yaml:"admin_token"`
 
     ChinaUpstreams []Upstream `yaml:"china_upstreams"`
     IntlUpstreams  []Upstream `yaml:"intl_upstreams"`

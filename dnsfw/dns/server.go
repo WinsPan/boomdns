@@ -13,6 +13,7 @@ import (
 
 type Server struct {
     cfg *Config
+    // TODO: add ring buffer for query logs, and atomic swap of rule sets on reload
 }
 
 func NewServer(cfg *Config) (*Server, error) {
