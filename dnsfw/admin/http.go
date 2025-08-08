@@ -26,7 +26,7 @@ func BindRoutes(r *chi.Mux, srv *dns.Server, cfg *dns.Config) {
 		pr.Post("/api/reload", api.reload)
 		pr.Get("/api/rules", api.getRules)
 		pr.Put("/api/rules", api.putRules)
-		pr.Get("/api/logs", api.getLogs)
+        pr.Get("/api/logs", api.getLogs)
 	})
 }
 
@@ -91,7 +91,7 @@ func (a *Api) putRules(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *Api) getLogs(w http.ResponseWriter, r *http.Request) {
-	// 预留：可返回最近查询日志（需要在 dns 层添加 ring buffer 记录）
-	w.Header().Set("content-type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{"items": []any{}})
+    w.Header().Set("content-type", "application/json")
+    items := a.srv.GetLogs(200)
+    _ = json.NewEncoder(w).Encode(map[string]any{"items": items})
 }
