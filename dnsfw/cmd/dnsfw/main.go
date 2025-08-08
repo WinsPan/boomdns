@@ -51,7 +51,7 @@ func main() {
 	}
 	go server.ServeTCP(tcpLn)
 
-	// Admin HTTP
+    // Admin HTTP
 	r := chi.NewRouter()
 	admin.BindRoutes(r, server, cfg)
 	r.Handle("/metrics", promhttp.Handler())
@@ -70,7 +70,13 @@ func main() {
 
 	log.Printf("dns listening on %s (udp/tcp)", cfg.ListenDNS)
 
-	// Hot reload on SIGHUP
+    // 规则远程订阅
+    ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
+    defer cancel()
+    syncer := dns.NewSyncManager(cfg, server)
+    go syncer.Start(ctx)
+
+    // Hot reload on SIGHUP
 	sigc := make(chan os.Signal, 1)
 	signal.Notify(sigc, syscall.SIGHUP, syscall.SIGTERM, syscall.SIGINT)
 	for s := range sigc {

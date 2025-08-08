@@ -25,6 +25,15 @@ func NewServer(cfg *Config) (*Server, error) {
 
 func (s *Server) ReloadRules() error { return nil }
 
+// SetRules 原子更新规则（由 SyncManager 或 API 调用）
+func (s *Server) SetRules(china, gfw, ads []string) {
+    s.mu.Lock()
+    defer s.mu.Unlock()
+    s.cfg.ChinaDomains = china
+    s.cfg.GfwDomains = gfw
+    s.cfg.AdDomains = ads
+}
+
 func (s *Server) ServeUDP(conn *net.UDPConn) {
 	srv := &mdns.Server{Handler: mdns.HandlerFunc(s.handle), PacketConn: conn}
 	if err := srv.ActivateAndServe(); err != nil {
