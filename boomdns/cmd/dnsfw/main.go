@@ -14,8 +14,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
-    "github.com/winspan/boomdns/admin"
-    "github.com/winspan/boomdns/dns"
+	"github.com/winspan/boomdns/admin"
+	"github.com/winspan/boomdns/dns"
 )
 
 func main() {
