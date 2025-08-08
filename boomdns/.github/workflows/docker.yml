@@ -29,8 +29,8 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
-          context: ./dnsfw
-          file: ./dnsfw/deploy/Dockerfile
+          context: ./boomdns
+          file: ./boomdns/deploy/Dockerfile
           push: true
           platforms: linux/amd64
           tags: |
