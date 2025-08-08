@@ -1,7 +1,11 @@
 version: "3.8"
 services:
   boomdns:
-    build: .
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        GOPROXY: https://goproxy.cn,direct
     container_name: boomdns
     ports:
       - "53:53/udp"
