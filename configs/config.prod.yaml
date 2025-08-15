@@ -1,0 +1,187 @@
+# BoomDNS 生产环境配置文件
+
+# 应用基础配置
+app:
+  name: "BoomDNS"
+  version: "1.0.0"
+  environment: "production"
+  debug: false
+
+# 服务器配置
+server:
+  dns: ":53"       # 生产环境使用标准 DNS 端口
+  http: ":8080"    # HTTP 管理界面端口
+
+# 数据库配置
+database:
+  type: "sqlite"
+  sqlite_file: "data/boomdns.db"
+  max_conn: 50
+  timeout: 60
+
+# 日志配置
+logging:
+  level: "info"            # 生产环境使用信息级别
+  format: "json"           # 生产环境使用 JSON 格式
+  output: "logs/boomdns.log"
+  max_size: 500            # 生产环境更大的日志文件
+  max_backups: 10          # 更多的备份文件
+  max_age: 90              # 更长的保留时间
+
+# 监控配置
+monitoring:
+  enabled: true
+  port: ":9090"
+  path: "/metrics"
+
+# 安全配置
+security:
+  admin_token: "${BOOMDNS_ADMIN_TOKEN}"  # 从环境变量读取
+  allowed_ips: ["${BOOMDNS_ALLOWED_IPS}"]  # 从环境变量读取
+  rate_limit: 5000         # 生产环境更高的限制
+
+# DNS 配置（完整版本）
+dns:
+  upstreams:
+    china:
+      - "223.5.5.5:53"
+      - "119.29.29.29:53"
+      - "180.76.76.76:53"
+      - "114.114.114.114:53"
+    international:
+      - "8.8.8.8:53"
+      - "1.1.1.1:53"
+      - "208.67.222.222:53"
+      - "9.9.9.9:53"
+  
+  cache:
+    enabled: true
+    size: 100000            # 生产环境更大的缓存
+    ttl: 3600
+    cleanup_interval: 600
+  
+  rules:
+    china:
+      - "baidu.com"
+      - "qq.com"
+      - "taobao.com"
+      - "alibaba.com"
+      - "tencent.com"
+      - "jd.com"
+      - "163.com"
+      - "126.com"
+      - "sina.com.cn"
+      - "sohu.com"
+      - ".cn"
+      - ".中国"
+    
+    gfw:
+      - "google.com"
+      - "youtube.com"
+      - "facebook.com"
+      - "twitter.com"
+      - "instagram.com"
+      - "github.com"
+      - "stackoverflow.com"
+      - "reddit.com"
+      - "wikipedia.org"
+      - "netflix.com"
+      - "spotify.com"
+      - "discord.com"
+      - "telegram.org"
+    
+    ads:
+      - "doubleclick.net"
+      - "googlesyndication.com"
+      - "googleadservices.com"
+      - "googletagmanager.com"
+      - "facebook.net"
+      - "amazon-adsystem.com"
+      - "adnxs.com"
+      - "adsystem.com"
+      - "adtech.com"
+      - "advertising.com"
+
+# 代理配置（生产环境启用）
+proxy:
+  enabled: true
+  listen_http: ":7890"
+  listen_socks: ":7891"
+  default_strategy: "auto"
+  test_interval: 300
+  test_timeout: 10
+  
+  # 代理节点配置（从环境变量或外部配置读取）
+  nodes: []
+  
+  # 代理组配置
+  groups: []
+  
+  # 代理规则配置
+  rules: []
+
+# 规则订阅配置（生产环境完整）
+subscriptions:
+  enabled: true
+  update_interval: 3600
+  timeout: 60              # 生产环境更长的超时
+  retry_count: 5           # 更多的重试次数
+  user_agent: "BoomDNS/1.0"
+  
+  sources:
+    - name: "GFWList"
+      url: "https://raw.githubusercontent.com/gfwlist/gfwlist/master/gfwlist.txt"
+      type: "gfwlist"
+      enabled: true
+      update_interval: 86400
+    
+    - name: "AdGuard DNS"
+      url: "https://adguardteam.github.io/AdGuardSDNSFilter/Filters/filter.txt"
+      type: "adguard"
+      enabled: true
+      update_interval: 86400
+    
+    - name: "China DNS"
+      url: "https://raw.githubusercontent.com/felixonmars/dnsmasq-china-list/master/accelerated-domains.china.conf"
+      type: "dnsmasq"
+      enabled: true
+      update_interval: 86400
+    
+    - name: "StevenBlack Hosts"
+      url: "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts"
+      type: "hosts"
+      enabled: true
+      update_interval: 86400
+
+# 性能配置（生产环境优化）
+performance:
+  go:
+    max_procs: 0           # 自动检测 CPU 核心数
+    mem_limit: "2GB"       # 生产环境更多内存
+    gc_percent: 100
+    debug: false
+  
+  system:
+    file_descriptors: 65536
+    max_connections: 50000  # 生产环境更多连接
+    buffer_size: 16384      # 更大的缓冲区
+    timeout: 60
+
+# 高级配置（生产环境完整）
+advanced:
+  health_check:
+    enabled: true
+    interval: 60
+    timeout: 15
+    retries: 5
+  
+  load_balancing:
+    enabled: true
+    strategy: "least_conn"
+    health_check: true
+  
+  failover:
+    enabled: true
+    strategy: "healthiest"
+    max_failures: 5
+    recovery_time: 600

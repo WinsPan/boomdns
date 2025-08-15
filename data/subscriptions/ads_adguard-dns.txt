@@ -1,0 +1,158 @@
+# BoomDNS 规则文件
+# 类别: ads
+# 来源: adguard-dns
+# 更新时间: 2025-08-15T15:56:12+08:00
+# 域名数量: 152
+
+.bbelements.com^
+.doublepimp.com^
+188.72.219.36^
+.n.2.1.js^
+.n.2.1.l60.js^
+.1.1.1.l80.js^
+.3.n.2.1.l50.js
+.3.n.2.2.l30.js
+vkcdnservice.appspot.com^
+.tvp.tv^
+-s2s.sensic.net^
+.ay.delivery^
+.stape.net
+.prod.pr.analytics.console.aws.a2z.com
+-tracker.biliapi.net^
+-telemetry.officeapps.live.com^
+-telemetry.officeapps.live.com.mcas.ms^
+charlestownwyllie.oaklawnnonantum.com^
+dynamic-report-api.appsflyersdk.com^
+-pia.appsflyersdk.com^
+-skadsdkless.appsflyersdk.com^
+-adrevenue.appsflyersdk.com^
+-attr.appsflyersdk.com^
+gcdsdk.appsflyersdk.com^
+dlsdk.appsflyersdk.com^
+dlsdk.appsflyer.com^
+-client-report.honkaiimpact3.com^
+-rtb.gravite.net^
+-spiky.clevertap-prod.com^
+-logsdk.kwai-pro.com^
+-ulog.ksapisrv.com^
+-ulog.kwai-pro.com^
+-ulog.kwaipros.com^
+-ulog.region.kwai-pro.com^
+-ulogl2.kwai-pro.com^
+-ulogl2.kwaipros.com^
+-logging.nextmedia.com^
+.infox.sg^
+.potopy.ru^
+.vipko.ru^
+.adonweb.ru^
+.allalla.com^
+.cpa1.ru^
+.ecommtools.com^
+.gameleads.ru^
+.is.traff-numerical.info^
+.piccash.net^
+.sexplaycam.com^
+.tovarro.com^
+.tpm.pw^
+.webhop.net^
+193.200.65.61^
+62.76.25.27^
+62.76.25.28^
+45.82.68.79^
+# This lists only contains domains which are used for ads, tracking or popups. it does not block in-HTML elements.
+# A hosts file that aims to get rid of ads, tracking, scams & badware on (mostly) Swedish websites
+# ----
+# title:          Frellwit's Swedish Hosts File
+# last updated:   2025-08-14 05:01:38 CEST
+# entries:        1141
+# format:         hosts (hosts -- in hosts file format)
+# >> A <<
+# ^ Used by irna.ir
+# >> B <<
+# >> C <<
+# >> D <<
+# ^ Used by Digiato, Vigiato, Rooziato
+# >> E <<
+# >> F <<
+#  TODO: Check for breakages (used by tamasha.com), investigate into more tracking
+# >> G <<
+# >> H <<
+# Example: behtarino.com
+# Example: androidha.com
+# >> I <<
+# >> J <<
+# >> K <<
+# Example: asrakhbar.com
+# >> L <<
+# >> M <<
+# Example: uploadgoogle.com
+# ^ Used by digikala.com
+# >> N <<
+# Example: sahebkhabar.ir
+# >> O <<
+# >> P <<
+# ^ Example: eghtesadonline.com
+# ^ Example: par30games.net
+# TODO: Remove it, Used by marzfun.com
+#  TODO: Remove it, Used by dlfox.com
+# ^ Example: imovie-dl.org
+# >> Q <<
+# >> R <<
+# >> S <<
+# power-music.ir, skmusic.ir, music-week.ir
+# Example: gapfilm.ir
+# Used by i-video.ir
+# ^ Used by kojaro.com
+# >> T <<
+# Example: anaj.ir
+# tavoos.net
+# ^ Example: film.tebyan.net
+# TODO: Investigate
+# >> U <<
+# ^ Used by bils.ir
+# >> V <<
+# >> W <<
+# webgozar.com
+# webgozar.ir
+# ^ They have tracking, but they also have polls
+# >> X <<
+# avaz-kurd.ir, power-music.ir
+# >> Y <<
+# >> Z <<
+# >> A <<
+# >> B <<
+# >> C <<
+# >> D <<
+# >> E <<
+# >> F <<
+# >> G <<
+# >> H <<
+# >> I <<
+# >> J <<
+# >> K <<
+# >> L <<
+# >> M <<
+# Referral links disguised as movie download links
+# On zarebin.ir
+# >> N <<
+# >> O <<
+# >> P <<
+# >> Q <<
+# >> R <<
+# >> S <<
+# sheypoor.com
+# >> T <<
+# >> U <<
+# >> V <<
+# >> W <<
+# >> X <<
+# >> Y <<
+# >> Z <<
+# Discussion?
+# Discussion?
+# Discussion?
+# آمیتیس?
+# What domain?
+# What domain?
+# What domain?
+# AdlIran scam

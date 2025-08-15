@@ -1,0 +1,123 @@
+# BoomDNS 开发环境配置文件
+
+# DNS 服务器配置
+listen_dns: ":5353"     # 开发环境使用非特权端口
+listen_http: ":8080"    # HTTP 管理界面端口
+admin_token: "boomdns-secret-token-2024"
+
+# 上游DNS服务器配置
+upstreams:
+  china:
+    - "223.5.5.5:53"      # 阿里 DNS
+    - "119.29.29.29:53"   # 腾讯 DNS
+    - "180.76.76.76:53"   # 百度 DNS
+  intl:
+    - "8.8.8.8:53"        # Google DNS
+    - "1.1.1.1:53"        # Cloudflare DNS
+    - "208.67.222.222:53" # OpenDNS
+  adguard:
+    - "176.103.130.130:53" # AdGuard DNS
+
+# 域名规则配置
+domains:
+  china:
+    - "baidu.com"
+    - "qq.com"
+    - "taobao.com"
+    - "alibaba.com"
+    - "tencent.com"
+    - "jd.com"
+    - "163.com"
+    - "126.com"
+    - "sina.com.cn"
+    - "sohu.com"
+  
+  gfw:
+    - "google.com"
+    - "youtube.com"
+    - "facebook.com"
+    - "twitter.com"
+    - "instagram.com"
+    - "github.com"
+    - "stackoverflow.com"
+    - "reddit.com"
+    - "wikipedia.org"
+    - "netflix.com"
+  
+  ads:
+    - "doubleclick.net"
+    - "googlesyndication.com"
+    - "googleadservices.com"
+    - "adnxs.com"
+    - "facebook.com"
+    - "adsystem.com"
+    - "adtech.com"
+    - "advertising.com"
+    - "adtechus.com"
+    - "adtech.de"
+
+# 规则同步配置
+sync:
+  enabled: true
+  interval: 3600
+  sources:
+    china: "https://raw.githubusercontent.com/felixonmars/dnsmasq-china-list/master/accelerated-domains.china.conf"
+    gfw: "https://raw.githubusercontent.com/gfwlist/gfwlist/master/gfwlist.txt"
+    ads: "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts"
+
+# 规则订阅配置
+subscriptions:
+  enabled: true
+  update_interval: 3600
+  timeout: 30
+  retry_count: 3
+  user_agent: "BoomDNS/1.0"
+  sources:
+    china:
+      - name: "中国域名列表"
+        url: "https://raw.githubusercontent.com/felixonmars/dnsmasq-china-list/master/accelerated-domains.china.conf"
+        format: "dnsmasq"
+        enabled: true
+    gfw:
+      - name: "GFW 域名列表"
+        url: "https://raw.githubusercontent.com/gfwlist/gfwlist/master/gfwlist.txt"
+        format: "gfwlist"
+        enabled: true
+    ads:
+      - name: "广告域名列表"
+        url: "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts"
+        format: "hosts"
+        enabled: true
+
+# 代理配置
+proxy:
+  enabled: false  # 开发环境禁用代理
+  listen_http: ":7890"
+  listen_socks: ":7891"
+  default_strategy: "auto"
+  test_interval: 300
+  test_timeout: 10
+
+# 代理节点配置
+proxy_nodes: []
+
+# 代理组配置
+proxy_groups: []
+
+# 代理规则配置
+proxy_rules: []
+
+# 数据持久化配置
+persistence:
+  enabled: true
+  data_dir: "data"
+  database:
+    type: "sqlite"
+    sqlite_file: "boomdns.db"
+    cache_file: "cache.json"
+    logs_file: "logs.json"
+    stats_file: "stats.json"
+    rules_file: "rules.json"
+  auto_save_interval: 300
+  max_logs: 1000
+  max_cache_entries: 1000

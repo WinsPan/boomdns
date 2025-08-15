@@ -1,8 +1,0 @@
-FROM scratch
-WORKDIR /
-COPY deploy/boomdns /boomdns
-EXPOSE 53/udp 53/tcp 8080
-ENTRYPOINT ["/boomdns"]
-CMD ["-config","/config/config.yaml"]
-
-

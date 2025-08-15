@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BoomDNS 管理界面</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/tabler-icons@1.35.0/icons-react/dist/index.umd.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/tabler-icons@1.35.0/iconfont/tabler-icons.min.css" rel="stylesheet">
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .card-hover:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+        .status-online { color: #10b981; }
+        .status-offline { color: #ef4444; }
+        .animate-pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <!-- 导航栏 -->
+    <nav class="gradient-bg text-white shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center py-4">
+                <div class="flex items-center space-x-3">
+                    <i class="ti ti-dns text-2xl"></i>
+                    <h1 class="text-xl font-bold">BoomDNS 管理界面</h1>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <span id="status-indicator" class="flex items-center space-x-2">
+                        <span class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
+                        <span id="status-text">在线</span>
+                    </span>
+                    <button id="refresh-btn" class="bg-white bg-opacity-20 hover:bg-opacity-30 px-3 py-1 rounded-lg transition-all">
+                        <i class="ti ti-refresh"></i> 刷新
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 主要内容 -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- 统计卡片 -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <div class="bg-white rounded-lg shadow-md p-6 card-hover transition-all">
+                <div class="flex items-center">
+                    <div class="p-3 rounded-full bg-blue-100 text-blue-600">
+                        <i class="ti ti-chart-bar text-xl"></i>
+                    </div>
+                    <div class="ml-4">
+                        <p class="text-sm font-medium text-gray-600">总查询数</p>
+                        <p id="total-queries" class="text-2xl font-bold text-gray-900">-</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow-md p-6 card-hover transition-all">
+                <div class="flex items-center">
+                    <div class="p-3 rounded-full bg-green-100 text-green-600">
+                        <i class="ti ti-route text-xl"></i>
+                    </div>
+                    <div class="ml-4">
+                        <p class="text-sm font-medium text-gray-600">路由分布</p>
+                        <p class="text-sm text-gray-500">中: <span id="china-queries" class="font-semibold">-</span> | 国: <span id="intl-queries" class="font-semibold">-</span></p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow-md p-6 card-hover transition-all">
+                <div class="flex items-center">
+                    <div class="p-3 rounded-full bg-yellow-100 text-yellow-600">
+                        <i class="ti ti-database text-xl"></i>
+                    </div>
+                    <div class="ml-4">
+                        <p class="text-sm font-medium text-gray-600">缓存性能</p>
+                        <p class="text-sm text-gray-500">命中: <span id="cache-queries" class="font-semibold">-</span> | 率: <span id="cache-hit-rate-display" class="font-semibold">-</span>%</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow-md p-6 card-hover transition-all">
+                <div class="flex items-center">
+                    <div class="p-3 rounded-full bg-indigo-100 text-indigo-600">
+                        <i class="ti ti-clock text-xl"></i>
+                    </div>
+                    <div class="ml-4">
+                        <p class="text-sm font-medium text-gray-600">响应性能</p>
+                        <p class="text-sm text-gray-500">平均: <span id="avg-latency" class="font-semibold">-</span> | 范围: <span id="latency-range" class="font-semibold">-</span></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 主要内容区域 -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- 左侧：规则管理 -->
+            <div class="lg:col-span-2 space-y-6">
+                <!-- 规则管理与同步监控卡片 -->
+                <div class="bg-white rounded-lg shadow-md">
+                    <div class="px-6 py-4 border-b border-gray-200">
+                        <h3 class="text-lg font-medium text-gray-900 flex items-center">
+                            <i class="ti ti-rules mr-2"></i>
+                            规则管理与同步监控
+                        </h3>
+                    </div>
+                    <div class="p-6">
+                        <!-- 规则管理部分 -->
+                        <div class="mb-6">
+                            <h4 class="text-md font-medium text-gray-900 mb-3">域名规则管理</h4>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                                <!-- 中国域名 -->
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">中国域名 <span class="text-xs text-gray-500">(绿色边框)</span></label>
+                                    <textarea id="china-rules" rows="6" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500" placeholder="每行一个域名，如：&#10;.cn&#10;.alipay.com&#10;.qq.com"></textarea>
+                                </div>
+                                
+                                <!-- GFW域名 -->
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">GFW域名 <span class="text-xs text-gray-500">(蓝色边框)</span></label>
+                                    <textarea id="gfw-rules" rows="6" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="每行一个域名，如：&#10;.google.com&#10;.twitter.com&#10;.youtube.com"></textarea>
+                                </div>
+                                
+                                <!-- 广告域名 -->
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">广告域名 <span class="text-xs text-gray-500">(红色边框)</span></label>
+                                    <textarea id="ad-rules" rows="6" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500" placeholder="每行一个域名，如：&#10;.doubleclick.net&#10;.googlesyndication.com&#10;.googleadservices.com"></textarea>
+                                </div>
+                            </div>
+                            
+                            <div class="flex space-x-3 mb-4">
+                                <button id="save-rules-btn" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md transition-colors">
+                                    <i class="ti ti-device-floppy mr-2"></i>保存规则
+                                </button>
+                                <button id="reload-rules-btn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md transition-colors">
+                                    <i class="ti ti-refresh mr-2"></i>重载规则
+                                </button>
+                            </div>
+                            
+                            <!-- 添加新规则 -->
+                            <div class="border-t border-gray-200 pt-4">
+                                <h5 class="text-sm font-medium text-gray-700 mb-3">快速添加新规则</h5>
+                                <div class="flex space-x-3 items-end">
+                                    <div class="w-32">
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">规则类型</label>
+                                        <select id="new-rule-type" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                            <option value="china">中国域名</option>
+                                            <option value="gfw">GFW域名</option>
+                                            <option value="ads">广告域名</option>
+                                        </select>
+                                    </div>
+                                    <div class="flex-1">
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">域名</label>
+                                        <input type="text" id="new-rule-domain" placeholder="输入域名，如: .example.com" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                    </div>
+                                    <button id="add-rule-btn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md transition-colors">
+                                        <i class="ti ti-plus mr-2"></i>添加
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 规则同步监控部分 -->
+                        <div class="border-t border-gray-200 pt-6">
+                            <h4 class="text-md font-medium text-gray-900 mb-3">规则同步监控</h4>
+                            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                                <div class="text-center">
+                                    <div class="text-2xl font-bold text-blue-600" id="sync-status">-</div>
+                                    <div class="text-sm text-gray-600">同步状态</div>
+                                </div>
+                                <div class="text-center">
+                                    <div class="text-2xl font-bold text-green-600" id="last-sync">-</div>
+                                    <div class="text-sm text-gray-600">最后同步</div>
+                                </div>
+                                <div class="text-center">
+                                    <div class="text-2xl font-bold text-purple-600" id="next-sync">-</div>
+                                    <div class="text-sm text-gray-600">下次同步</div>
+                                </div>
+                                <div class="text-center">
+                                    <div class="text-2xl font-bold text-orange-600" id="sync-success-rate">-</div>
+                                    <div class="text-sm text-gray-600">成功率(%)</div>
+                                </div>
+                            </div>
+                            
+                            <div class="flex space-x-3">
+                                <button id="sync-now-btn" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md transition-colors">
+                                    <i class="ti ti-refresh mr-2"></i>立即同步
+                                </button>
+                                <button id="refresh-sync-btn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md transition-colors">
+                                    <i class="ti ti-eye mr-2"></i>查看详情
+                                </button>
+                            </div>
+                            
+                            <!-- 规则统计概览 -->
+                            <div class="mt-4 border-t border-gray-200 pt-4">
+                                <h5 class="text-sm font-medium text-gray-700 mb-3">规则统计概览</h5>
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <!-- 中国域名统计 -->
+                                    <div class="bg-green-50 p-3 rounded-md">
+                                        <div class="flex items-center justify-between mb-2">
+                                            <span class="text-sm font-medium text-green-800">中国域名</span>
+                                            <span class="text-xs text-green-600 bg-green-100 px-2 py-1 rounded-full" id="china-rules-count">0</span>
+                                        </div>
+                                        <div class="text-xs text-green-700 space-y-1 max-h-20 overflow-y-auto" id="china-rules-list">
+                                            <!-- 规则列表将通过JavaScript动态加载 -->
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- GFW域名统计 -->
+                                    <div class="bg-blue-50 p-3 rounded-md">
+                                        <div class="flex items-center justify-between mb-2">
+                                            <span class="text-sm font-medium text-blue-800">GFW域名</span>
+                                            <span class="text-xs text-blue-600 bg-blue-100 px-2 py-1 rounded-full" id="gfw-rules-count">0</span>
+                                        </div>
+                                        <div class="text-xs text-blue-700 space-y-1 max-h-20 overflow-y-auto" id="gfw-rules-list">
+                                            <!-- 规则列表将通过JavaScript动态加载 -->
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- 广告域名统计 -->
+                                    <div class="bg-red-50 p-3 rounded-md">
+                                        <div class="flex items-center justify-between mb-2">
+                                            <span class="text-sm font-medium text-red-800">广告域名</span>
+                                            <span class="text-xs text-red-600 bg-red-100 px-2 py-1 rounded-full" id="ads-rules-count">0</span>
+                                        </div>
+                                        <div class="text-xs text-red-700 space-y-1 max-h-20 overflow-y-auto" id="ads-rules-list">
+                                            <!-- 规则列表将通过JavaScript动态加载 -->
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 缓存管理卡片 -->
+                <div class="bg-white rounded-lg shadow-md">
+                    <div class="px-6 py-4 border-b border-gray-200">
+                        <h3 class="text-lg font-medium text-gray-900 flex items-center">
+                            <i class="ti ti-database mr-2"></i>
+                            缓存管理
+                        </h3>
+                    </div>
+                    <div class="p-6">
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                            <div class="text-center">
+                                <div class="text-2xl font-bold text-blue-600" id="cache-hits">-</div>
+                                <div class="text-sm text-gray-600">缓存命中</div>
+                            </div>
+                            <div class="text-center">
+                                <div class="text-2xl font-bold text-red-600" id="cache-misses">-</div>
+                                <div class="text-sm text-gray-600">缓存未命中</div>
+                            </div>
+                            <div class="text-center">
+                                <div class="text-2xl font-bold text-green-600" id="cache-hit-rate">-</div>
+                                <div class="text-sm text-gray-600">命中率(%)</div>
+                            </div>
+                            <div class="text-center">
+                                <div class="text-2xl font-bold text-purple-600" id="cache-entries">-</div>
+                                <div class="text-sm text-gray-600">缓存条目</div>
+                            </div>
+                        </div>
+                        
+                        <div class="flex space-x-3">
+                            <button id="refresh-cache-btn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md transition-colors">
+                                <i class="ti ti-refresh mr-2"></i>刷新缓存
+                            </button>
+                            <button id="clear-cache-btn" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md transition-colors">
+                                <i class="ti ti-trash mr-2"></i>清空缓存
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 延迟统计详情卡片 -->
+                <div class="bg-white rounded-lg shadow-md">
+                    <div class="px-6 py-4 border-b border-gray-200">
+                        <h3 class="text-lg font-medium text-gray-900 flex items-center">
+                            <i class="ti ti-clock mr-2"></i>
+                            延迟统计详情
+                        </h3>
+                    </div>
+                    <div class="p-6">
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                            <div class="text-center">
+                                <div class="text-2xl font-bold text-blue-600" id="total-queries-latency">-</div>
+                                <div class="text-sm text-gray-600">总查询数</div>
+                            </div>
+                            <div class="text-center">
+                                <div class="text-2xl font-bold text-green-600" id="min-latency">-</div>
+                                <div class="text-sm text-gray-600">最小延迟(ms)</div>
+                            </div>
+                            <div class="text-center">
+                                <div class="text-2xl font-bold text-orange-600" id="max-latency">-</div>
+                                <div class="text-sm text-gray-600">最大延迟(ms)</div>
+                            </div>
+                            <div class="text-center">
+                                <div class="text-2xl font-bold text-purple-600" id="total-latency">-</div>
+                                <div class="text-sm text-gray-600">总延迟(ms)</div>
+                            </div>
+                        </div>
+                        
+                        <!-- 路由延迟统计表格 -->
+                        <div class="mt-6">
+                            <h4 class="text-md font-medium text-gray-900 mb-3">各路由延迟统计</h4>
+                            <div class="overflow-x-auto">
+                                <table class="min-w-full divide-y divide-gray-200">
+                                    <thead class="bg-gray-50">
+                                        <tr>
+                                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">路由</th>
+                                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">查询数</th>
+                                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">平均延迟(ms)</th>
+                                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">最小延迟(ms)</th>
+                                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">最大延迟(ms)</th>
+                                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">最后更新</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="route-latency-tbody" class="bg-white divide-y divide-gray-200">
+                                        <!-- 路由延迟数据将通过JavaScript动态加载 -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-4 flex space-x-3">
+                            <button id="refresh-latency-btn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md transition-colors">
+                                <i class="ti ti-refresh mr-2"></i>刷新统计
+                            </button>
+                            <button id="reset-latency-btn" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md transition-colors">
+                                <i class="ti ti-rotate-ccw mr-2"></i>重置统计
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 查询日志卡片 -->
+                <div class="bg-white rounded-lg shadow-md">
+                    <div class="px-6 py-4 border-b border-gray-200">
+                        <h3 class="text-lg font-medium text-gray-900 flex items-center">
+                            <i class="ti ti-list mr-2"></i>
+                            查询日志
+                        </h3>
+                    </div>
+                    <div class="p-6">
+                        <!-- 日志控制面板 -->
+                        <div class="mb-6 space-y-4">
+                            <!-- 搜索和过滤 -->
+                            <div class="flex flex-col sm:flex-row gap-4">
+                                <div class="flex-1">
+                                    <input type="text" id="log-search" placeholder="搜索域名..." class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                </div>
+                                <select id="log-route-filter" class="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                    <option value="">所有路由</option>
+                                    <option value="china">中国路由</option>
+                                    <option value="intl">国际路由</option>
+                                    <option value="adguard">广告拦截</option>
+                                    <option value="cache">缓存命中</option>
+                                </select>
+                                <select id="log-time-filter" class="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                    <option value="">所有时间</option>
+                                    <option value="1h">最近1小时</option>
+                                    <option value="24h">最近24小时</option>
+                                    <option value="7d">最近7天</option>
+                                </select>
+                                <select id="log-page-size" class="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                    <option value="50">50条/页</option>
+                                    <option value="100" selected>100条/页</option>
+                                    <option value="200">200条/页</option>
+                                </select>
+                            </div>
+                            
+                            <!-- 日志统计和操作 -->
+                            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                                <div class="text-sm text-gray-600">
+                                    总计: <span id="log-total" class="font-semibold">0</span>条 | 
+                                    当前页: <span id="log-current-page" class="font-semibold">1</span>/<span id="log-total-pages" class="font-semibold">0</span> | 
+                                    显示: <span id="log-display-count" class="font-semibold">0</span>条
+                                </div>
+                                <div class="flex space-x-2">
+                                    <button id="export-logs-btn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md transition-colors text-sm">
+                                        <i class="ti ti-download mr-2"></i>导出日志
+                                    </button>
+                                    <button id="clear-logs-btn" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md transition-colors text-sm">
+                                        <i class="ti ti-trash mr-2"></i>清空日志
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 日志表格 -->
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-200">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100" id="log-time-header">
+                                            <div class="flex items-center space-x-1">
+                                                <span>时间</span>
+                                                <i class="ti ti-arrows-sort text-gray-400"></i>
+                                            </div>
+                                        </th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100" id="log-name-header">
+                                            <div class="flex items-center space-x-1">
+                                                <span>域名</span>
+                                                <i class="ti ti-arrows-sort text-gray-400"></i>
+                                            </div>
+                                        </th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100" id="log-route-header">
+                                            <div class="flex items-center space-x-1">
+                                                <span>路由</span>
+                                                <i class="ti ti-arrows-sort text-gray-400"></i>
+                                            </div>
+                                        </th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100" id="log-latency-header">
+                                            <div class="flex items-center space-x-1">
+                                                <span>延迟</span>
+                                                <i class="ti ti-arrows-sort text-gray-400"></i>
+                                            </div>
+                                        </th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            <span>操作</span>
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody id="log-tbody" class="bg-white divide-y divide-gray-200">
+                                    <!-- 日志数据将通过JavaScript动态加载 -->
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        <!-- 分页控制 -->
+                        <div class="mt-6 flex items-center justify-between">
+                            <div class="flex items-center space-x-2">
+                                <button id="log-prev-page" class="px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                                    <i class="ti ti-chevron-left mr-1"></i>上一页
+                                </button>
+                                <span class="text-sm text-gray-700">
+                                    第<span id="log-page-info">1</span>页
+                                </span>
+                                <button id="log-next-page" class="px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                                    下一页<i class="ti ti-chevron-right ml-1"></i>
+                                </button>
+                            </div>
+                            
+                            <div class="flex items-center space-x-2">
+                                <span class="text-sm text-gray-700">跳转到:</span>
+                                <input type="number" id="log-go-to-page" min="1" class="w-16 px-2 py-1 border border-gray-300 rounded-md text-sm" placeholder="页码">
+                                <button id="log-go-btn" class="px-3 py-1 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700">
+                                    跳转
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 订阅源管理卡片 -->
+                <div class="bg-white rounded-lg shadow-md">
+                    <div class="px-6 py-4 border-b border-gray-200">
+                        <h3 class="text-lg font-medium text-gray-900 flex items-center">
+                            <i class="ti ti-list mr-2"></i>
+                            订阅源管理
+                        </h3>
+                    </div>
+                    <div class="p-6">
+                        <!-- 订阅源列表 -->
+                        <div class="mb-6">
+                            <div class="flex justify-between items-center mb-4">
+                                <h4 class="text-md font-medium text-gray-900">订阅源列表</h4>
+                                <button id="add-source-btn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md transition-colors">
+                                    <i class="ti ti-plus mr-2"></i>添加订阅源
+                                </button>
+                            </div>
+                            
+                            <div id="subscription-sources-list" class="space-y-3">
+                                <!-- 订阅源列表将通过JavaScript动态加载 -->
+                            </div>
+                        </div>
+                        
+                        <!-- 订阅源统计 -->
+                        <div class="border-t border-gray-200 pt-4">
+                            <h5 class="text-sm font-medium text-gray-700 mb-3">订阅源统计</h5>
+                            <div class="grid grid-cols-3 gap-4 text-center">
+                                <div class="bg-blue-50 p-3 rounded-lg">
+                                    <div class="text-2xl font-bold text-blue-600" id="total-sources">-</div>
+                                    <div class="text-sm text-gray-600">总订阅源</div>
+                                </div>
+                                <div class="bg-green-50 p-3 rounded-lg">
+                                    <div class="text-2xl font-bold text-green-600" id="enabled-sources">-</div>
+                                    <div class="text-sm text-gray-600">已启用</div>
+                                </div>
+                                <div class="bg-purple-50 p-3 rounded-lg">
+                                    <div class="text-2xl font-bold text-purple-600" id="total-rules">-</div>
+                                    <div class="text-sm text-gray-600">总规则数</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 右侧：系统信息 -->
+            <div class="space-y-6">
+                <!-- 系统状态卡片 -->
+                <div class="bg-white rounded-lg shadow-md">
+                    <div class="px-6 py-4 border-b border-gray-200">
+                        <h3 class="text-lg font-medium text-gray-900 flex items-center">
+                            <i class="ti ti-server mr-2"></i>
+                            系统状态
+                        </h3>
+                    </div>
+                    <div class="p-6 space-y-4">
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-600">DNS服务</span>
+                            <span id="dns-status" class="status-online font-medium">运行中</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-600">HTTP管理</span>
+                            <span id="http-status" class="status-online font-medium">运行中</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-600">规则同步</span>
+                            <span id="sync-status" class="status-online font-medium">运行中</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 上游DNS状态 -->
+                <div class="bg-white rounded-lg shadow-md">
+                    <div class="px-6 py-4 border-b border-gray-200">
+                        <h3 class="text-lg font-medium text-gray-900 flex items-center">
+                            <i class="ti ti-arrow-up mr-2"></i>
+                            上游DNS状态
+                        </h3>
+                    </div>
+                    <div class="p-6">
+                        <div id="upstream-status" class="space-y-3">
+                            <!-- 上游状态将通过JavaScript动态加载 -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 快速操作 -->
+                <div class="bg-white rounded-lg shadow-md">
+                    <div class="px-6 py-4 border-b border-gray-200">
+                        <h3 class="text-lg font-medium text-gray-900 flex items-center">
+                            <i class="ti ti-tools mr-2"></i>
+                            快速操作
+                        </h3>
+                    </div>
+                    <div class="p-6 space-y-3">
+                        <button id="clear-logs-btn" class="w-full bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-md transition-colors">
+                            <i class="ti ti-trash mr-2"></i>清空日志
+                        </button>
+                        <button id="export-config-btn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md transition-colors">
+                            <i class="ti ti-download mr-2"></i>导出配置
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 订阅源管理模态框 -->
+    <div id="subscription-source-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden z-50">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="bg-white rounded-lg shadow-xl max-w-md w-full">
+                <div class="px-6 py-4 border-b border-gray-200">
+                    <h3 class="text-lg font-medium text-gray-900" id="modal-title">添加订阅源</h3>
+                </div>
+                <form id="subscription-source-form" class="p-6 space-y-4">
+                    <input type="hidden" id="source-id" value="">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">订阅源名称</label>
+                        <input type="text" id="source-name" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">分类</label>
+                        <select id="source-category" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                            <option value="">请选择分类</option>
+                            <option value="china">中国域名</option>
+                            <option value="gfw">GFW域名</option>
+                            <option value="ads">广告域名</option>
+                            <option value="malware">恶意域名</option>
+                            <option value="custom">自定义</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">订阅URL</label>
+                        <input type="url" id="source-url" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">规则格式</label>
+                        <select id="source-format" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                            <option value="">请选择格式</option>
+                            <option value="dnsmasq">dnsmasq</option>
+                            <option value="gfwlist">gfwlist</option>
+                            <option value="hosts">hosts</option>
+                            <option value="adguard">adguard</option>
+                            <option value="plain">plain</option>
+                        </select>
+                    </div>
+                    <div class="flex items-center">
+                        <input type="checkbox" id="source-enabled" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" checked>
+                        <label class="ml-2 block text-sm text-gray-900">启用订阅源</label>
+                    </div>
+                </form>
+                <div class="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3">
+                    <button id="cancel-source-btn" class="px-4 py-2 text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-md transition-colors">取消</button>
+                    <button id="save-source-btn" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 通知提示 -->
+    <div id="notification" class="fixed top-4 right-4 max-w-sm bg-white border border-gray-200 rounded-lg shadow-lg transform translate-x-full transition-transform duration-300 z-50">
+        <div class="p-4">
+            <div class="flex items-start">
+                <div class="flex-shrink-0">
+                    <i id="notification-icon" class="ti ti-check text-green-400"></i>
+                </div>
+                <div class="ml-3">
+                    <p id="notification-message" class="text-sm font-medium text-gray-900">操作成功</p>
+                </div>
+                <div class="ml-auto pl-3">
+                    <button id="notification-close" class="inline-flex text-gray-400 hover:text-gray-600">
+                        <i class="ti ti-x"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

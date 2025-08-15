@@ -1,0 +1,72 @@
+# BoomDNS 简化配置文件
+
+# DNS 服务器配置
+listen_dns: ":5354"
+listen_http: ":8081"
+admin_token: "boomdns-secret-token-2024"
+
+# 上游DNS服务器配置
+upstreams:
+  china:
+    - "223.5.5.5:53"
+  intl:
+    - "8.8.8.8:53"
+
+# 域名规则配置
+domains:
+  china:
+    - "baidu.com"
+    - "qq.com"
+  gfw:
+    - "google.com"
+    - "github.com"
+  ads:
+    - "doubleclick.net"
+
+# 规则同步配置
+sync:
+  enabled: false
+  interval: 3600
+  sources: {}
+
+# 规则订阅配置
+subscriptions:
+  enabled: false
+  update_interval: 3600
+  timeout: 30
+  retry_count: 3
+  user_agent: "BoomDNS/1.0"
+  sources: {}
+
+# 代理配置
+proxy:
+  enabled: false
+  listen_http: ":7890"
+  listen_socks: ":7891"
+  default_strategy: "auto"
+  test_interval: 300
+  test_timeout: 10
+
+# 代理节点配置
+proxy_nodes: []
+
+# 代理组配置
+proxy_groups: []
+
+# 代理规则配置
+proxy_rules: []
+
+# 数据持久化配置
+persistence:
+  enabled: true
+  data_dir: "data"
+  database:
+    type: "sqlite"
+    sqlite_file: "boomdns.db"
+    cache_file: "cache.json"
+    logs_file: "logs.json"
+    stats_file: "stats.json"
+    rules_file: "rules.json"
+  auto_save_interval: 300
+  max_logs: 1000
+  max_cache_entries: 1000
